@@ -2,6 +2,7 @@ interface Options {
   eventSymbolName?: string;
   key?: any;
   groupKey?: string;
+  childrenClassName?: string;
 }
 
 interface BrowserOptions extends Options {
@@ -37,16 +38,19 @@ class DefaultConnector {
   key: any;
   groupKey: any;
   eventSymbolName: string;
+  childrenClassName: string;
   _eventHandlers: EventHandlers = {}; // somewhere global
 
   constructor({
     key = Symbol(),
     groupKey = "ryperEventGroup",
     eventSymbolName = "ryperEvent",
+    childrenClassName = "",
   }: Options) {
     this.key = key;
     this.groupKey = groupKey;
     this.eventSymbolName = eventSymbolName;
+    this.childrenClassName = childrenClassName;
   }
 
   _addListener(
@@ -158,12 +162,9 @@ class BrowserConnector extends DefaultConnector {
     window.addEventListener(
       "message",
       ({ data }: MessageEvent<NotificationParams>) => {
-        const { eventName, groupKey } = data;
+        const { eventName } = data;
 
         if (!eventName) {
-          return;
-        }
-        if (groupKey !== this.groupKey) {
           return;
         }
 
@@ -172,15 +173,21 @@ class BrowserConnector extends DefaultConnector {
       false
     );
   }
+
   _broadCast(params: NotificationParams) {
     const { eventName, data } = params;
 
     this._dispatch(eventName, data);
 
     let list = document.getElementsByTagName("iframe");
-    Array.prototype.forEach.call(list, (iframe) => {
-      iframe.contentWindow.postMessage(params, "*");
+    Array.prototype.forEach.call(list, (iframe: HTMLIFrameElement) => {
+      const flag = iframe.classList.contains(this.childrenClassName);
+      flag && iframe.contentWindow?.postMessage(params, "*");
     });
+
+    // list는 배열이 아닌 유사배열로써 forEach 함수가 존재하지 않습니다.
+    // 그러므로 Array.prototype.forEach 함수를 직접 접근하여 call 함수를 이용하여 this binding을 유사배열로 변경하여 처리합니다.
+    // 유사배열 역시 length 함수가 있으므로 forEach 함수를 이용할 때 length를 이용하므로 문제 없이 동작합니다.
   }
   _subscribe({ eventName, handler }: SubscribeParams) {
     this._removeAllListeners(document, eventName);
