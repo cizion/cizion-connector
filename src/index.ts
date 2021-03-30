@@ -2,12 +2,10 @@ interface Options {
   eventSymbolName?: string;
   key?: any;
   groupKey?: string;
-  childrenClassName?: string;
 }
 
 interface BrowserOptions extends Options {
-  parent?: boolean;
-  children?: boolean;
+  childrenClassName?: string;
 }
 
 type OptionsList = { browser: BrowserOptions };
@@ -38,19 +36,16 @@ class DefaultConnector {
   key: any;
   groupKey: any;
   eventSymbolName: string;
-  childrenClassName: string;
   _eventHandlers: EventHandlers = {}; // somewhere global
 
   constructor({
     key = Symbol(),
     groupKey = "ryperEventGroup",
     eventSymbolName = "ryperEvent",
-    childrenClassName = "",
   }: Options) {
     this.key = key;
     this.groupKey = groupKey;
     this.eventSymbolName = eventSymbolName;
-    this.childrenClassName = childrenClassName;
   }
 
   _addListener(
@@ -145,40 +140,29 @@ class DefaultConnector {
 }
 
 class BrowserConnector extends DefaultConnector {
-  parent: boolean;
-  children: boolean;
-  constructor({
-    parent = !!(self === top),
-    children = !!!(self === top),
-    ...params
-  }: BrowserOptions) {
+  childrenClassName: string;
+  constructor({ childrenClassName = "", ...params }: BrowserOptions) {
     super(params);
-
-    this.parent = parent;
-    this.children = children;
+    this.childrenClassName = childrenClassName;
   }
 
   init() {
     window.addEventListener(
       "message",
       ({ data }: MessageEvent<NotificationParams>) => {
-        const { eventName } = data;
+        const { key, eventName, data: eventData } = data;
 
         if (!eventName) {
           return;
         }
 
-        this._broadCast(data);
+        this.key !== key && this._dispatch(eventName, eventData);
       },
       false
     );
   }
 
   _broadCast(params: NotificationParams) {
-    const { eventName, data } = params;
-
-    this._dispatch(eventName, data);
-
     let list = document.getElementsByTagName("iframe");
     Array.prototype.forEach.call(list, (iframe: HTMLIFrameElement) => {
       const flag = iframe.classList.contains(this.childrenClassName);
@@ -197,7 +181,7 @@ class BrowserConnector extends DefaultConnector {
     params.key = this.key;
     params.groupKey = this.groupKey;
 
-    if (this.parent) {
+    if (this.childrenClassName) {
       this._broadCast(params);
     } else {
       window.parent.postMessage(params, "*");
@@ -228,7 +212,7 @@ const Connector = (() => {
 
   const init = (
     type: keyof typeof connectorList,
-    options: OptionsList[keyof typeof connectorList]
+    options: OptionsList[keyof typeof connectorList] = {}
   ) => {
     if (!connectorList[type]) {
       throw "connector is not defined";
