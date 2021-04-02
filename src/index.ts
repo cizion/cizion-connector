@@ -1,30 +1,19 @@
-interface Options {
-  eventSymbolName?: string;
-  key?: any;
-  groupKey?: string;
+interface DataParams {
+  [key: string]: any;
 }
 
-interface BrowserOptions extends Options {
-  childrenClassName?: string;
+interface DefaultOptions {
+  key: string;
+  groupKey: string;
 }
 
-type OptionsList = { browser: BrowserOptions };
-
-interface NotificationParams {
-  eventName: string;
-  key?: Options["key"];
-  groupKey?: Options["groupKey"];
-  data?: any;
-}
-
-interface SubscribeParams {
-  eventName: string;
-  handler: EventListenerOrEventListenerObject | null;
+interface BrowserOptions extends DefaultOptions {
+  topLevel?: boolean;
 }
 
 interface EventItem {
   node: Node;
-  handler: EventListenerOrEventListenerObject | null;
+  handler: EventListener | null;
   capture: EventListenerOptions | boolean;
 }
 
@@ -32,26 +21,34 @@ interface EventHandlers {
   [eventName: string]: Array<EventItem>;
 }
 
-class DefaultConnector {
-  key: any;
-  groupKey: any;
-  eventSymbolName: string;
-  _eventHandlers: EventHandlers = {}; // somewhere global
+interface NotificationParams {
+  libraryKey: string;
+  eventName: string;
+  params: DataParams;
+  key: DefaultOptions["key"];
+  groupKey: DefaultOptions["groupKey"];
+  direction: boolean;
+}
 
-  constructor({
-    key = Symbol(),
-    groupKey = "ryperEventGroup",
-    eventSymbolName = "ryperEvent",
-  }: Options) {
+interface SubscribeParams {
+  eventName: string;
+  handler: EventListener | null;
+}
+
+class DefaultConnector {
+  key: DefaultOptions["key"];
+  groupKey: DefaultOptions["groupKey"];
+  _eventHandlers: EventHandlers = {};
+
+  constructor({ key, groupKey }: DefaultOptions) {
     this.key = key;
     this.groupKey = groupKey;
-    this.eventSymbolName = eventSymbolName;
   }
 
   _addListener(
     node: Node,
     eventName: string,
-    handler: EventListenerOrEventListenerObject | null,
+    handler: EventListener | null,
     capture: EventListenerOptions | boolean = false
   ) {
     if (!(eventName in this._eventHandlers)) {
@@ -85,134 +82,162 @@ class DefaultConnector {
     );
   }
 
-  _dispatch(eventName: string, data?: any) {
-    document.dispatchEvent(
+  _dispatch(
+    targetNode: Node,
+    eventName: string,
+    { key, params }: NotificationParams
+  ) {
+    if (key === this.key) {
+      return;
+    }
+    targetNode.dispatchEvent(
       new CustomEvent(eventName, {
-        detail: data,
+        detail: params,
       })
     );
   }
 
   _generateEventName(eventName: string) {
-    return `${eventName}.${this.eventSymbolName}`;
+    return `${this.groupKey}.${eventName}`;
   }
 
-  init() {
-    throw "must override init";
-  }
-
-  subscribe(params: SubscribeParams) {
-    const { eventName, handler } = params;
+  subscribe({ eventName, handler = null }: SubscribeParams) {
     if (!eventName) {
       throw "not have eventName";
     }
-    if (!handler) {
-      throw "not have handler";
-    }
+
     const newParams = {
-      ...params,
       eventName: this._generateEventName(eventName),
+      handler,
     };
+
     this._subscribe(newParams);
   }
 
   _subscribe(params: SubscribeParams) {
     console.log(params);
-    throw "must override init";
+    throw "must override _subscribe";
   }
 
-  notification(params: NotificationParams) {
-    const { eventName } = params;
+  notification({ eventName, params = {} }: DataParams) {
     if (!eventName) {
       throw "not have eventName";
     }
-    const newParams = {
-      ...params,
+
+    const notification = {
+      libraryKey: "cizion-connector",
       eventName: this._generateEventName(eventName),
+      key: this.key,
+      groupKey: this.groupKey,
+      params,
+      direction: false,
     };
-    this._notification(newParams);
+
+    this._notification(notification);
   }
 
-  _notification(params: NotificationParams) {
-    console.log(params);
+  _notification(notification: NotificationParams) {
+    console.log(notification);
+    throw "must override _notification";
+  }
+
+  init() {
     throw "must override init";
   }
 }
 
 class BrowserConnector extends DefaultConnector {
-  childrenClassName: string;
-  constructor({ childrenClassName = "", ...params }: BrowserOptions) {
+  topLevel: BrowserOptions["topLevel"];
+  constructor({ topLevel = self === top, ...params }: BrowserOptions) {
     super(params);
-    this.childrenClassName = childrenClassName;
+    this.topLevel = topLevel;
   }
 
   init() {
     window.addEventListener(
       "message",
       ({ data }: MessageEvent<NotificationParams>) => {
-        const { key, eventName, data: eventData } = data;
-
-        if (!eventName) {
-          return;
-        }
-
-        this.key !== key && this._dispatch(eventName, eventData);
-      },
-      false
+        this._notification(data);
+      }
     );
   }
 
-  _broadCast(params: NotificationParams) {
+  _broadCast(notification: NotificationParams) {
     let list = document.getElementsByTagName("iframe");
     Array.prototype.forEach.call(list, (iframe: HTMLIFrameElement) => {
-      const flag = iframe.classList.contains(this.childrenClassName);
-      flag && iframe.contentWindow?.postMessage(params, "*");
+      const flag = iframe.classList.contains(this.groupKey);
+      flag && iframe.contentWindow?.postMessage(notification, "*");
     });
-
-    // list는 배열이 아닌 유사배열로써 forEach 함수가 존재하지 않습니다.
-    // 그러므로 Array.prototype.forEach 함수를 직접 접근하여 call 함수를 이용하여 this binding을 유사배열로 변경하여 처리합니다.
-    // 유사배열 역시 length 함수가 있으므로 forEach 함수를 이용할 때 length를 이용하므로 문제 없이 동작합니다.
   }
+
   _subscribe({ eventName, handler }: SubscribeParams) {
     this._removeAllListeners(document, eventName);
-    this._addListener(document, eventName, handler);
+    this._addListener(document, eventName, (e) => {
+      handler && handler((e as Event & { detail: any }).detail);
+    });
   }
-  _notification(params: NotificationParams) {
-    params.key = this.key;
-    params.groupKey = this.groupKey;
 
-    if (this.childrenClassName) {
-      this._broadCast(params);
+  _notification(notification: NotificationParams) {
+    let { libraryKey, direction, eventName } = notification;
+
+    if (libraryKey !== "cizion-connector") {
+      return;
+    }
+
+    if (this.topLevel) {
+      direction = true;
+      notification.direction = direction;
+    }
+
+    if (!direction) {
+      window.parent.postMessage(notification, "*");
     } else {
-      window.parent.postMessage(params, "*");
+      this._dispatch(document, eventName, notification);
+      this._broadCast(notification);
     }
   }
 }
 
+type ConnectorList = {
+  browser: BrowserConnector;
+  default: DefaultConnector;
+};
+
+type OptionsList = {
+  browser: BrowserOptions;
+  default: DefaultOptions;
+};
+
+const connectorList = {
+  browser: BrowserConnector,
+  default: DefaultConnector,
+};
+
 const Connector = (() => {
-  let connectorList = {
-    browser: BrowserConnector,
-  };
   let connector: DefaultConnector;
 
   const _getInstance = () => {
     if (!connector) {
       throw "must call init";
     }
+
     return connector;
   };
 
-  const subscribe = (params: SubscribeParams) => {
-    _getInstance().subscribe(params);
+  const subscribe = (
+    eventName: string,
+    handler: EventListener | null = null
+  ) => {
+    _getInstance().subscribe({ eventName, handler });
   };
 
-  const notification = (params: NotificationParams) => {
-    _getInstance().notification(params);
+  const notification = (eventName: string, params: DataParams = {}) => {
+    _getInstance().notification({ eventName, params });
   };
 
   const init = (
-    type: keyof typeof connectorList,
-    options: OptionsList[keyof typeof connectorList] = {}
+    type: keyof ConnectorList,
+    options: OptionsList[keyof ConnectorList]
   ) => {
     if (!connectorList[type]) {
       throw "connector is not defined";
@@ -222,7 +247,11 @@ const Connector = (() => {
     connector.init();
   };
 
-  return { init, subscribe, notification };
+  return {
+    init,
+    subscribe,
+    notification,
+  };
 })();
 
 export default Connector;
