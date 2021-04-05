@@ -32,7 +32,7 @@ interface NotificationParams {
 
 interface SubscribeParams {
   eventName: string;
-  handler: EventListener | null;
+  handler: Function | null;
 }
 
 class DefaultConnector {
@@ -224,10 +224,7 @@ const Connector = (() => {
     return connector;
   };
 
-  const subscribe = (
-    eventName: string,
-    handler: EventListener | null = null
-  ) => {
+  const subscribe = (eventName: string, handler: Function | null = null) => {
     _getInstance().subscribe({ eventName, handler });
   };
 
