@@ -165,8 +165,9 @@ class BrowserConnector extends DefaultConnector {
   _broadCast(notification: NotificationParams) {
     let list = document.getElementsByTagName("iframe");
     Array.prototype.forEach.call(list, (iframe: HTMLIFrameElement) => {
-      const flag = iframe.classList.contains(this.groupKey);
-      flag && iframe.contentWindow?.postMessage(notification, "*");
+      // const flag = iframe.classList.contains(this.groupKey);
+      // flag && iframe.contentWindow?.postMessage(notification, "*");
+      iframe.contentWindow?.postMessage(notification, "*");
     });
   }
 
