@@ -1,12 +1,19 @@
-
 {
   "presets": [
-    ["@babel/env", {
-      "useBuiltIns": "usage",
-      "corejs": 3,
-      "shippedProposals": true,
-      "targets": "> 0.25%, not dead"
-    }],
+    [
+      "@babel/env",
+      {
+        "useBuiltIns": "usage",
+        "corejs": 3,
+        "shippedProposals": true,
+        "targets": {
+          "browsers": ["> 1%", "last 2 versions", "not ie < 10"]
+        }
+      }
+    ],
     ["@babel/typescript"]
+  ],
+  "plugins": [
+    // ["@babel/plugin-transform-runtime", { "corejs": 3 }],
   ]
 }
