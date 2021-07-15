@@ -1,3 +1,5 @@
+import "custom-event-polyfill";
+
 interface DataParams {
   [key: string]: any;
 }
