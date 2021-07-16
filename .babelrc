@@ -3,17 +3,16 @@
     [
       "@babel/env",
       {
-        "useBuiltIns": "usage",
-        "corejs": 3,
-        "shippedProposals": true,
+        // "useBuiltIns": "usage",
+        // "corejs": 3,
+        // "shippedProposals": true,
         "targets": {
           "browsers": ["> 1%", "last 2 versions", "not ie < 10"]
-        }
+        },
+        "modules": "cjs"
       }
     ],
     ["@babel/typescript"]
   ],
-  "plugins": [
-    // ["@babel/plugin-transform-runtime", { "corejs": 3 }],
-  ]
+  "plugins": [["@babel/plugin-transform-runtime", { "corejs": 3 }]]
 }
